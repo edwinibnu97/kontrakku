@@ -25,7 +25,7 @@ tier (Spark plan, Gemini Developer API backend — no billing, no card).
 
 ## Live demo
 
-https://kontrakku.vercel.app (URL final setelah deploy — lihat HANDOFF.md)
+https://kontrakku-rosy.vercel.app
 
 ## How to run locally
 
