@@ -7,6 +7,10 @@ import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "fireb
 
 // Text-only cloud model, free tier (no "requires Blaze" footnote in Firebase docs).
 const CLOUD_MODEL = "gemini-3.8-flash";
+// Fallback cloud model (also free-tier text): 3.8-flash can return transient
+// 500/503 under load ("high demand", "Deadline expired"). One retry with the
+// lighter default model keeps the analysis working instead of failing.
+const CLOUD_FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
 function readConfig() {
   const e = import.meta.env;
@@ -95,6 +99,28 @@ ${JSON.stringify(facts)}
 Contract:
 """${contract}"""`;
 
+// Cloud generation with a one-step model fallback: try CLOUD_MODEL first,
+// and on ANY failure retry once with CLOUD_FALLBACK_MODEL before giving up.
+// (Transient 500/503 overloads on the primary model are common; a 401/auth
+// failure would fail on the fallback too and still surface as an error.)
+async function generateCloud(prompt, onProgress, stageLabel) {
+  const primary = getGenerativeModel(ai, {
+    mode: InferenceMode.ONLY_IN_CLOUD,
+    inCloudParams: { model: CLOUD_MODEL },
+  });
+  try {
+    return await primary.generateContent(prompt);
+  } catch (e) {
+    console.warn(`Cloud ${stageLabel} with ${CLOUD_MODEL} failed, retrying with ${CLOUD_FALLBACK_MODEL}:`, e);
+    if (onProgress) onProgress(stageLabel, "Primary model busy — retrying with fallback model…");
+    const fallback = getGenerativeModel(ai, {
+      mode: InferenceMode.ONLY_IN_CLOUD,
+      inCloudParams: { model: CLOUD_FALLBACK_MODEL },
+    });
+    return fallback.generateContent(prompt);
+  }
+}
+
 // Runs both hybrid stages. Must be called from a user gesture (Analyze click):
 // getGenerativeModel + initializeDeviceModel require user interaction.
 // Returns { facts, stage1Source, risk, stage2Source }.
@@ -132,27 +158,16 @@ export async function analyzeContract(contractText, onProgress) {
   } catch (e) {
     console.warn("On-device Stage 1 failed, falling back to cloud:", e);
     progress("stage1", "On-device unavailable — falling back to cloud…");
-    // NOTE: when `mode` is set, the SDK ignores a top-level `model` — the
-    // cloud model must go through inCloudParams (otherwise it silently uses
-    // the default gemini-3.5-flash-lite). Verified against @firebase/ai types:
-    // getGenerativeModel takes ModelParams | HybridParams.
-    const fallbackModel = getGenerativeModel(ai, {
-      mode: InferenceMode.ONLY_IN_CLOUD,
-      inCloudParams: { model: CLOUD_MODEL },
-    });
-    r1 = await fallbackModel.generateContent(EXTRACT_PROMPT(contractText));
+    r1 = await generateCloud(EXTRACT_PROMPT(contractText), progress, "stage1");
     stage1Source = r1.response.inferenceSource || "IN_CLOUD";
   }
   const facts = extractJson(r1.response.text());
 
   // Stage 2 — cloud only: risk explanation in plain language.
-  // (Same inCloudParams rule as the fallback above.)
+  // (Same inCloudParams rule as the fallback above; generateCloud adds the
+  // fallback-model retry on transient 500/503.)
   progress("stage2", "Explaining risks in plain language…");
-  const cloudModel = getGenerativeModel(ai, {
-    mode: InferenceMode.ONLY_IN_CLOUD,
-    inCloudParams: { model: CLOUD_MODEL },
-  });
-  const r2 = await cloudModel.generateContent(RISK_PROMPT(contractText, facts));
+  const r2 = await generateCloud(RISK_PROMPT(contractText, facts), progress, "stage2");
   const stage2Source = r2.response.inferenceSource || "IN_CLOUD";
   const risk = extractJson(r2.response.text());
 
