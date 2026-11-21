@@ -2,7 +2,7 @@
 // ALL AI inference goes through Firebase AI Logic. No other model API is called.
 // Free tier only: GoogleAIBackend (Gemini Developer API, Spark plan), text models only.
 import { initializeApp } from "firebase/app";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "firebase/ai";
 
 // Text-only cloud model, free tier (no "requires Blaze" footnote in Firebase docs).
@@ -36,12 +36,14 @@ export function initFirebase() {
   if (!configured) return { configured: false, appCheckReady: false };
   if (!app) {
     app = initializeApp(cfg);
-    // App Check is required for Firebase AI Logic. Production uses reCAPTCHA v3
-    // (site key is public). Debug tokens are dev-only and never shipped here.
+    // App Check is required for Firebase AI Logic. Production uses the
+    // reCAPTCHA Enterprise provider (Fraud Defense Essentials, free tier,
+    // registered in the Firebase console; site key is public).
+    // Debug tokens are dev-only and never shipped here.
     if (recaptchaSiteKey) {
       try {
         initializeAppCheck(app, {
-          provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+          provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey),
           isTokenAutoRefreshEnabled: true,
         });
         appCheckReady = true;
@@ -117,15 +119,38 @@ export async function analyzeContract(contractText, onProgress) {
     // On-device unavailable: PREFER_ON_DEVICE falls back to cloud on generateContent.
     console.warn("initializeDeviceModel:", e);
   }
-  const r1 = await hybridModel.generateContent(EXTRACT_PROMPT(contractText));
-  const stage1Source = r1.response.inferenceSource || "UNKNOWN";
+  // On-device generation can throw even after initializeDeviceModel resolves
+  // (e.g. QuotaExceededError "The input is too large" while Nano is still
+  // downloading, or no usable on-device quota in this browser). The documented
+  // design is automatic cloud fallback, so retry Stage 1 in the cloud instead
+  // of failing the whole analysis.
+  let r1;
+  let stage1Source;
+  try {
+    r1 = await hybridModel.generateContent(EXTRACT_PROMPT(contractText));
+    stage1Source = r1.response.inferenceSource || "UNKNOWN";
+  } catch (e) {
+    console.warn("On-device Stage 1 failed, falling back to cloud:", e);
+    progress("stage1", "On-device unavailable — falling back to cloud…");
+    // NOTE: when `mode` is set, the SDK ignores a top-level `model` — the
+    // cloud model must go through inCloudParams (otherwise it silently uses
+    // the default gemini-3.5-flash-lite). Verified against @firebase/ai types:
+    // getGenerativeModel takes ModelParams | HybridParams.
+    const fallbackModel = getGenerativeModel(ai, {
+      mode: InferenceMode.ONLY_IN_CLOUD,
+      inCloudParams: { model: CLOUD_MODEL },
+    });
+    r1 = await fallbackModel.generateContent(EXTRACT_PROMPT(contractText));
+    stage1Source = r1.response.inferenceSource || "IN_CLOUD";
+  }
   const facts = extractJson(r1.response.text());
 
   // Stage 2 — cloud only: risk explanation in plain language.
+  // (Same inCloudParams rule as the fallback above.)
   progress("stage2", "Explaining risks in plain language…");
   const cloudModel = getGenerativeModel(ai, {
-    model: CLOUD_MODEL,
     mode: InferenceMode.ONLY_IN_CLOUD,
+    inCloudParams: { model: CLOUD_MODEL },
   });
   const r2 = await cloudModel.generateContent(RISK_PROMPT(contractText, facts));
   const stage2Source = r2.response.inferenceSource || "IN_CLOUD";
