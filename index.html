@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KontrakKu — Understand any contract before you sign</title>
+    <meta name="description" content="KontrakKu reads rental and loan contracts in two hybrid steps: key points extracted privately on-device with Gemini Nano, risks explained in plain language by Gemini in the cloud — all through Firebase AI Logic." />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>📄 KontrakKu</h1>
+        <p class="tagline">Understand any contract before you sign it.</p>
+        <p class="sub">Paste a rental or loan contract. Key points are extracted <strong>privately on your device</strong> with Gemini Nano — then Gemini in the cloud explains the risks in plain language. All AI runs through <strong>Firebase AI Logic</strong>.</p>
+        <div class="badges">
+          <span class="badge" id="backendBadge">Checking AI backends…</span>
+          <span class="badge">Free · No sign-up · No wallet</span>
+          <span class="badge">Web / Chrome · Gemini Nano + Gemini cloud</span>
+        </div>
+      </header>
+
+      <section class="card">
+        <label for="contractInput">Contract text</label>
+        <textarea id="contractInput" rows="12" placeholder="Paste your rental agreement or loan contract here (English works best)…"></textarea>
+        <div class="row">
+          <button id="analyzeBtn" class="primary">Analyze contract</button>
+          <button id="sampleRentalBtn" class="secondary">🏠 Try: Rental agreement</button>
+          <button id="sampleLoanBtn" class="secondary">💰 Try: Personal loan</button>
+          <label class="fileBtn">📎 Upload .txt <input type="file" id="fileInput" accept=".txt,text/plain" hidden /></label>
+          <button id="clearBtn" class="ghost">Clear</button>
+        </div>
+        <p class="hint" id="statusLine">Ready. Your text is sent to AI only when you press Analyze.</p>
+      </section>
+
+      <section class="card" id="resultsCard" hidden>
+        <h2>Results</h2>
+        <div class="stage" id="stageDevice">
+          <h3>Stage 1 — Key points <span class="tag ondevice">On-device</span></h3>
+          <p class="stage-note" id="deviceNote">Extracted privately on this device with Gemini Nano. Nothing left the device in this stage.</p>
+          <div id="keyPoints"></div>
+        </div>
+        <div class="stage" id="stageCloud">
+          <h3>Stage 2 — Risks, plainly <span class="tag cloud">Cloud</span></h3>
+          <p class="stage-note" id="cloudNote">Explained by Gemini in the cloud via Firebase AI Logic.</p>
+          <div class="scoreRow">
+            <div class="scoreBox" id="riskScoreBox">
+              <div class="scoreNum" id="riskScore">–</div>
+              <div class="scoreLabel" id="riskVerdict">Risk score / 100</div>
+            </div>
+            <p class="summary" id="riskSummary"></p>
+          </div>
+          <h4>Red flags</h4>
+          <ul id="redFlags"></ul>
+        </div>
+        <p class="disclaimer">⚠️ KontrakKu is not a lawyer and this is not legal advice. Always read the full contract and consult a qualified professional before signing.</p>
+      </section>
+
+      <section class="card">
+        <h2>How the hybrid works</h2>
+        <ol>
+          <li><strong>On-device (Gemini Nano, Firebase AI Logic, PREFER_ON_DEVICE):</strong> the contract's key facts — parties, amounts, term, interest/fees, late penalties, termination — are extracted on this device. Sensitive text stays private in this stage.</li>
+          <li><strong>Cloud (Gemini via Firebase AI Logic):</strong> the extracted facts are explained in plain language, with red flags and a 0–100 risk score.</li>
+          <li>If this device has no on-device model, Stage 1 falls back to the cloud automatically — the badge above always shows which backend actually answered.</li>
+        </ol>
+        <p class="small">Built for #BuildHybridAI 2026. Free forever. <a id="repoLink" href="https://github.com/edwinibnu97/kontrakku" target="_blank" rel="noopener">Source code on GitHub</a></p>
+      </section>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

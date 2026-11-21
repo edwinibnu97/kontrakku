@@ -1,0 +1,20 @@
+{
+  "name": "kontrakku",
+  "version": "1.0.0",
+  "description": "KontrakKu — understand any contract before you sign. Hybrid on-device (Gemini Nano) + cloud (Gemini) contract reader built with Firebase AI Logic. #BuildHybridAI 2026.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "firebase": "^13.4.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
